@@ -1,0 +1,74 @@
+# GitLab CI/CD Template for Python Django Projects
+# This template includes stages for installation, linting, and testing Django applications
+
+image: python:3.10-slim
+
+# Define stages for the pipeline
+stages:
+  - install
+  - lint
+  - test
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
+  DJANGO_SETTINGS_MODULE: "project.settings"  # Change this to your project's settings module
+  PYTHONPATH: "$CI_PROJECT_DIR"
+
+# Cache pip dependencies between jobs
+cache:
+  paths:
+    - .pip-cache/
+    - venv/
+
+# Install dependencies
+install:
+  stage: install
+  script:
+    - python -V  # Print Python version for debugging
+    - python -m pip install --upgrade pip
+    - python -m venv venv
+    - source venv/bin/activate
+    - pip install -r requirements.txt
+    # Install additional dependencies for development/testing
+    - pip install pytest pytest-django flake8 coverage
+  artifacts:
+    paths:
+      - venv/
+    expire_in: 1 hour
+
+# Lint code with flake8
+lint:
+  stage: lint
+  needs:
+    - install
+  script:
+    - source venv/bin/activate
+    - echo "Running flake8 to check code style..."
+    - flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+    - flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+  allow_failure: true  # Pipeline continues even if linting fails
+
+# Run pytest for unit tests
+test:
+  stage: test
+  needs:
+    - install
+  services:
+    - postgres:13  # Uncomment and configure if your app needs a database
+  variables:
+    # Database configuration - uncomment and adjust as needed
+    # POSTGRES_DB: test_db
+    # POSTGRES_USER: postgres
+    # POSTGRES_PASSWORD: postgres
+    # DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/test_db"
+  script:
+    - source venv/bin/activate
+    - echo "Running tests with pytest..."
+    - pytest --cov=./ --cov-report=xml
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    when: always
+    expire_in: 1 week
